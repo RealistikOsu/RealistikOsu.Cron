@@ -33,7 +33,7 @@ public class ScoreRepository : IScoreRepository
                 WHERE s.beatmap_md5 = @BeatmapMd5 AND s.play_mode = @Mode AND s.completed = 3 AND users.privileges & 1 ORDER BY {sort} DESC LIMIT 1";
         
         using var connection = _dbContext.CreateConnection();
-        var bestScore = await connection.QuerySingleAsync<dynamic>(query, new { BeatmapMd5 = beatmapMd5, Mode = mode });
+        var bestScore = await connection.QuerySingleOrDefaultAsync<dynamic>(query, new { BeatmapMd5 = beatmapMd5, Mode = mode });
         if (bestScore is null)
             return null;
 
