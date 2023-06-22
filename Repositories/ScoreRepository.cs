@@ -57,8 +57,7 @@ public class ScoreRepository : IScoreRepository
             Accuracy = bestScore.accuracy,
             PerformancePoints = bestScore.pp,
             PlayTime = bestScore.playtime,
-            BeatmapMd5 = bestScore.beatmap_md5,
-            Relax = bestScore.relax,
+            BeatmapMd5 = bestScore.beatmap_md5
         };
     }
 }

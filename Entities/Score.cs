@@ -21,5 +21,4 @@ public class Score
     public required double PerformancePoints { get; init; }
     public required int PlayTime { get; init; }
     public required string BeatmapMd5 { get; init; }
-    public required int Relax { get; init; }
 }

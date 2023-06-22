@@ -122,7 +122,7 @@ public class Worker : BackgroundService
             PerformancePoints = newBest.PerformancePoints,
             PlayTime = newBest.PlayTime,
             BeatmapMd5 = newBest.BeatmapMd5,
-            Relax = newBest.Relax
+            Relax = relax
         };
         await _firstPlaceRepository.CreateAsync(firstPlace);
     }
