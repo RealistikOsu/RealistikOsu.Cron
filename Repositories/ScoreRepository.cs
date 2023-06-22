@@ -29,7 +29,7 @@ public class ScoreRepository : IScoreRepository
         };
 
         var query =
-            $@"SELECT *, `300_count` as count_300, `100_count` as count_100, `50_count` as count_50 FROM {table} s INNER JOIN users ON users.id = s.userid 
+            $@"SELECT s.*, `300_count` as count_300, `100_count` as count_100, `50_count` as count_50 FROM {table} s INNER JOIN users ON users.id = s.userid 
                 WHERE s.beatmap_md5 = @BeatmapMd5 AND s.play_mode = @Mode AND s.completed = 3 AND users.privileges & 1 ORDER BY {sort} DESC LIMIT 1";
         
         using var connection = _dbContext.CreateConnection();
@@ -40,7 +40,7 @@ public class ScoreRepository : IScoreRepository
         return new Score
         {
             Id = bestScore.id,
-            UserId = bestScore.user_id,
+            UserId = bestScore.userid,
             PlayScore = bestScore.score,
             MaxCombo = bestScore.max_combo,
             FullCombo = (bool)bestScore.full_combo,
@@ -48,15 +48,15 @@ public class ScoreRepository : IScoreRepository
             Count300 = bestScore.count_300,
             Count100 = bestScore.count_100,
             Count50 = bestScore.count_50,
-            CountKatu = bestScore.ckatus_count,
-            CountGeki = bestScore.cgekis_count,
-            CountMiss = bestScore.miss_count,
-            SubmittedAt = bestScore.timestamp,
-            Mode = bestScore.mode,
+            CountKatu = bestScore.katus_count,
+            CountGeki = bestScore.gekis_count,
+            CountMiss = bestScore.misses_count,
+            SubmittedAt = bestScore.time,
+            Mode = bestScore.play_mode,
             Completed = bestScore.completed,
             Accuracy = bestScore.accuracy,
             PerformancePoints = bestScore.pp,
-            PlayTime = bestScore.play_time,
+            PlayTime = bestScore.playtime,
             BeatmapMd5 = bestScore.beatmap_md5,
             Relax = bestScore.relax,
         };
