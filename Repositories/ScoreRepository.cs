@@ -51,7 +51,7 @@ public class ScoreRepository : IScoreRepository
             CountKatu = bestScore.katus_count,
             CountGeki = bestScore.gekis_count,
             CountMiss = bestScore.misses_count,
-            SubmittedAt = bestScore.time,
+            SubmittedAt = int.Parse(bestScore.time),
             Mode = bestScore.play_mode,
             Completed = bestScore.completed,
             Accuracy = bestScore.accuracy,
