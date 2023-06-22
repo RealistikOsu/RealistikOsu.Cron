@@ -24,10 +24,16 @@ public class DotEnv
                 var parts = line.Split(
                     '=',
                     StringSplitOptions.RemoveEmptyEntries);
-    
-                if (parts.Length != 2)
-                    continue;
-    
+
+                switch (parts.Length)
+                {
+                    case < 2:
+                        continue;
+                    case > 2:
+                        parts[1] = string.Join('=', parts[1..]);
+                        break;
+                }
+
                 Environment.SetEnvironmentVariable(parts[0], UnquoteString(parts[1]));
             }
         }
