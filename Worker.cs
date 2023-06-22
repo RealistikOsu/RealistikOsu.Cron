@@ -26,7 +26,7 @@ public class Worker : BackgroundService
         IScoreRepository scoreRepository, IUserBadgeRepository userBadgeRepository, 
         IUserStatsRepository userStatsRepository)
     {
-        _fokaKey = configuration.GetValue<string>("FokaKey")!;
+        _fokaKey = configuration.GetValue<string>("FokaKey") ?? string.Empty;
         _banchoApiUrl = configuration.GetValue<string>("BanchoApiUrl")!;
         _donorBadgeId = configuration.GetValue<int>("DonorBadgeId");
         
