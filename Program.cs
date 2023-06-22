@@ -16,11 +16,11 @@ builder.Services.AddSingleton(redisConnectionMultiplexer);
 
 builder.Services.AddSingleton<DapperContext>();
 
-builder.Services.AddScoped<IUserRepository, UserRepository>();
-builder.Services.AddScoped<IFirstPlaceRepository, FirstPlaceRepository>();
-builder.Services.AddScoped<IScoreRepository, ScoreRepository>();
-builder.Services.AddScoped<IUserBadgeRepository, UserBadgeRepository>();
-builder.Services.AddScoped<IUserStatsRepository, UserStatsRepository>();
+builder.Services.AddSingleton<IUserRepository, UserRepository>();
+builder.Services.AddSingleton<IFirstPlaceRepository, FirstPlaceRepository>();
+builder.Services.AddSingleton<IScoreRepository, ScoreRepository>();
+builder.Services.AddSingleton<IUserBadgeRepository, UserBadgeRepository>();
+builder.Services.AddSingleton<IUserStatsRepository, UserStatsRepository>();
 
 builder.Services.AddHostedService<Worker>();
 
