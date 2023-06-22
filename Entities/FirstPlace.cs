@@ -19,7 +19,7 @@ public class FirstPlace
     public required int Mode { get; init; }
     public required int Completed { get; init; }
     public required float Accuracy { get; init; }
-    public required float PerformancePoints { get; init; }
+    public required double PerformancePoints { get; init; }
     public required int PlayTime { get; init; }
     public required string BeatmapMd5 { get; init; }
     public required int Relax { get; init; }
