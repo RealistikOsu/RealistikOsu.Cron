@@ -27,7 +27,7 @@ public class UserRepository : IUserRepository
             Privileges = (Privileges)item.privileges,
             LatestActivity = item.latest_activity,
             BanReason = item.ban_reason,
-            BannedAt = item.ban_datetime,
+            BannedAt = int.Parse(item.ban_datetime),
             DonorExpiresAt = item.donor_expire,
             Frozen = (bool)item.frozen,
             FreezeExpiresAt = item.freezedate
