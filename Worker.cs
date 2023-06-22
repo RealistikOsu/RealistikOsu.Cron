@@ -209,7 +209,7 @@ public class Worker : BackgroundService
 
             var users = await _userRepository.GetAllAsync();
             var donors = users.Where(user => user.Privileges.HasFlag(Privileges.Donor));
-            var frozenUsers = users.Where(user => user.Frozen);
+            var frozenUsers = users.Where(user => user.Frozen && user.Privileges.HasFlag(Privileges.Public));
             var inactiveUsers = users.Where(user =>
                 user.LatestActivity < (DateTimeOffset.Now - TimeSpan.FromDays(60)).ToUnixTimeSeconds() && !user.Privileges.HasFlag(Privileges.PendingVerification));
 
