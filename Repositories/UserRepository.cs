@@ -29,7 +29,7 @@ public class UserRepository : IUserRepository
             BanReason = item.ban_reason,
             BannedAt = int.Parse(item.ban_datetime),
             DonorExpiresAt = item.donor_expire,
-            Frozen = (bool)item.frozen,
+            Frozen = item.frozen == 1,
             FreezeExpiresAt = item.freezedate
         });
 
