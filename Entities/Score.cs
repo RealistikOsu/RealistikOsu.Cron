@@ -4,7 +4,7 @@ public class Score
 {
     public required int Id { get; init; }
     public required int UserId { get; init; }
-    public required int PlayScore { get; init; }
+    public required long PlayScore { get; init; }
     public required int MaxCombo { get; init; }
     public required bool FullCombo { get; init; }
     public required int Mods { get; init; }

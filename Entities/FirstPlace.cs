@@ -5,7 +5,7 @@ public class FirstPlace
     public int Id { get; init; }
     public required int ScoreId { get; init; }
     public required int UserId { get; init; }
-    public required int Score { get; init; }
+    public required long Score { get; init; }
     public required int MaxCombo { get; init; }
     public required bool FullCombo { get; init; }
     public required int Mods { get; init; }
