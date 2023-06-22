@@ -79,6 +79,16 @@ public class Worker : BackgroundService
         }
     }
 
+    private async Task<bool> UserInLeaderboard(int userId)
+    {
+        var redis = _redisConnectionMultiplexer.GetDatabase();
+
+        var exampleKey = LeaderboardKeys[0];
+        var result = await redis.SortedSetRankAsync(exampleKey, userId);
+
+        return result is not null;
+    }
+
     private async Task NotifyBan(int userId)
     {
         var redis = _redisConnectionMultiplexer.GetDatabase();
@@ -182,6 +192,10 @@ public class Worker : BackgroundService
     {
         foreach (var inactiveUser in inactiveUsers)
         {
+            var inLeaderboard = await UserInLeaderboard(inactiveUser.Id);
+            if (!inLeaderboard)
+                continue;
+
             await RemoveUserFromLeaderboard(inactiveUser.Id, inactiveUser.CountryCode);
             _logger.LogDebug("Removed {user} ({user_id}) from leaderboards due to inactivity", inactiveUser.Username, inactiveUser.Id);
         }
