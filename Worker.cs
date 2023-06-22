@@ -197,7 +197,7 @@ public class Worker : BackgroundService
             var donors = users.Where(user => user.Privileges.HasFlag(Privileges.Donor));
             var frozenUsers = users.Where(user => user.Frozen);
             var inactiveUsers = users.Where(user =>
-                user.LatestActivity < (DateTimeOffset.Now - TimeSpan.FromDays(60)).ToUnixTimeSeconds());
+                user.LatestActivity < (DateTimeOffset.Now - TimeSpan.FromDays(60)).ToUnixTimeSeconds() && !user.Privileges.HasFlag(Privileges.PendingVerification));
 
             await Task.WhenAll(
                 RemoveExpiredDonors(donors), 
