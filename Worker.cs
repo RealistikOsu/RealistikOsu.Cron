@@ -201,6 +201,14 @@ public class Worker : BackgroundService
         }
     }
 
+    private async Task FillLeaderboards(IEnumerable<User> users)
+    {
+        foreach (var user in  users)
+        {
+            var stats = await _userStatsRepository.
+        }
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -213,10 +221,12 @@ public class Worker : BackgroundService
             var inactiveUsers = users.Where(user =>
                 user.LatestActivity < (DateTimeOffset.Now - TimeSpan.FromDays(60)).ToUnixTimeSeconds() && !user.Privileges.HasFlag(Privileges.PendingVerification));
 
+            var unrestrictedUsers = users.Where(user => user.Privileges.HasFlag(Privileges.Public));
+
             await Task.WhenAll(
-                RemoveExpiredDonors(donors), 
+                RemoveExpiredDonors(donors),
                 RestrictExpiredFrozenUsers(frozenUsers),
-                RemoveInactiveUsersFromLeaderboard(inactiveUsers)
+                FillLeaderboards(unrestrictedUsers)
             );
 
             await Task.Delay(TimeSpan.FromMinutes(30), stoppingToken);
