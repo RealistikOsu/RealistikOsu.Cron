@@ -31,7 +31,7 @@ public class UserStatsRepository : IUserStatsRepository
         var user = (await connection.QueryAsync<dynamic>(query, new { userId }))
             .Select(item => new UserStats
         {
-            Id = item.Id,
+            Id = item.id,
             CanCustomBadge = item.can_custom_badge == 1,
             ShowCustomBadge = item.show_custom_badge == 1,
             standardPerformancePoints = item.pp_std,
@@ -43,18 +43,9 @@ public class UserStatsRepository : IUserStatsRepository
         return user;
     }
 
-    public async Task<UserStats> GetVanillaUserAsync(int userId)
-    {
-        return await GetFromTable(userId, "users_stats");
-    }
+    public async Task<UserStats> GetVanillaUserAsync(int userId) => await GetFromTable(userId, "users_stats");
 
-    public async Task<UserStats> GetRelaxUserAsync(int userId)
-    {
-        return await GetFromTable(userId, "rx_stats");
-    }
+    public async Task<UserStats> GetRelaxUserAsync(int userId) => await GetFromTable(userId, "rx_stats");
 
-    public async Task<UserStats> GetAutopilotUserAsync(int userId)
-    {
-        return await GetFromTable(userId, "ap_stats");
-    }
+    public async Task<UserStats> GetAutopilotUserAsync(int userId) => await GetFromTable(userId, "ap_stats");
 }
