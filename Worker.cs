@@ -273,8 +273,11 @@ public class Worker : BackgroundService
 
                 await redis.SortedSetRemoveAsync(key , user.Id);
                 if (countryKey is not null) await redis.SortedSetRemoveAsync(countryKey, user.Id);
+
+                _logger.LogDebug("Removed {user} ({user_id}) from leaderboards due to being restricted.", user.Username, user.Id);
             }
         }
+        _logger.LogInformation("Removed {count} restricted users from the leaderboards.", users.Count());
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
