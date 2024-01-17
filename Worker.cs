@@ -241,6 +241,13 @@ public class Worker : BackgroundService
             {
                 var value = PerformanceKeyLookup[key](vn_stats, rx_stats, ap_stats);
 
+                // If we have a zero value, remove them from the lb.
+                if (value == 0)
+                {
+                    await redis.SortedSetRemoveAsync(key, user.Id);
+                    continue;
+                }
+
                 await redis.SortedSetAddAsync(key, user.Id, value);
             }
         }
