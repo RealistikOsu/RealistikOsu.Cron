@@ -239,16 +239,25 @@ public class Worker : BackgroundService
 
             foreach (var key in LeaderboardKeys)
             {
+                string? countryKey = null;
+                if (user.CountryCode != "XX")
+                {
+                    countryKey = $"{key}:{user.CountryCode}";
+                }
+
                 var value = PerformanceKeyLookup[key](vn_stats, rx_stats, ap_stats);
 
                 // If we have a zero value, remove them from the lb.
                 if (value == 0)
                 {
                     await redis.SortedSetRemoveAsync(key, user.Id);
+
+                    if (countryKey is not null) await redis.SortedSetRemoveAsync(countryKey, user.Id);
                     continue;
                 }
 
                 await redis.SortedSetAddAsync(key, user.Id, value);
+                if (countryKey is not null) await redis.SortedSetAddAsync(countryKey, user.Id, value);
             }
         }
     }
