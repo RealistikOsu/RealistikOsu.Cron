@@ -23,7 +23,7 @@ public class UserStatsRepository : IUserStatsRepository
         await connection.ExecuteAsync(query, userStats);
     }
 
-    private async Task<UserStats?> GetFromTable(int userId, string table)
+    private async Task<UserStats> GetFromTable(int userId, string table)
     {
         string query = $"SELECT * FROM {table} WHERE id = @userId";
 
@@ -43,17 +43,17 @@ public class UserStatsRepository : IUserStatsRepository
         return user;
     }
 
-    public async Task<UserStats?> GetVanillaUserAsync(int userId)
+    public async Task<UserStats> GetVanillaUserAsync(int userId)
     {
         return await GetFromTable(userId, "users_stats");
     }
 
-    public async Task<UserStats?> GetRelaxUserAsync(int userId)
+    public async Task<UserStats> GetRelaxUserAsync(int userId)
     {
         return await GetFromTable(userId, "rx_stats");
     }
 
-    public async Task<UserStats?> GetAutopilotUserAsync(int userId)
+    public async Task<UserStats> GetAutopilotUserAsync(int userId)
     {
         return await GetFromTable(userId, "ap_stats");
     }

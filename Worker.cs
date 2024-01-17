@@ -5,6 +5,8 @@ using StackExchange.Redis;
 
 namespace RealistikOsu.Cron;
 
+using PerformanceFunction = Func<UserStats, UserStats, UserStats, float>;
+
 public class Worker : BackgroundService
 {
     private readonly string _fokaKey;
@@ -52,6 +54,18 @@ public class Worker : BackgroundService
         "ripple:leaderboard_ap:std"
     };
 
+    private static readonly Dictionary<string, PerformanceFunction> PerformanceKeyLookup = new Dictionary<string, PerformanceFunction>()
+    {
+        { "ripple:leaderboard:std", (vn, rx, ap) => vn.standardPerformancePoints },
+        { "ripple:leaderboard:taiko",  (vn, rx, ap) => vn.taikoPerformancePoints },
+        { "ripple:leaderboard:ctb",  (vn, rx, ap) => vn.catchPerformancePoints },
+        { "ripple:leaderboard:mania",  (vn, rx, ap) => vn.maniaPerformancePoints },
+        { "ripple:leaderboard_relax:std",  (vn, rx, ap) => rx.standardPerformancePoints },
+        { "ripple:leaderboard_relax:taiko",  (vn, rx, ap) => rx.taikoPerformancePoints },
+        { "ripple:leaderboard_relax:ctb",  (vn, rx, ap) => rx.catchPerformancePoints },
+        { "ripple:leaderboard_ap:std",  (vn, rx, ap) => ap.standardPerformancePoints },
+    };
+
     private async Task SendFokabotMessage(Dictionary<string, string> parameters)
     {
         var requestUrl = $"{_banchoApiUrl}/api/v1/fokabotMessage";
@@ -83,10 +97,21 @@ public class Worker : BackgroundService
     {
         var redis = _redisConnectionMultiplexer.GetDatabase();
 
-        var exampleKey = LeaderboardKeys[0];
-        var result = await redis.SortedSetRankAsync(exampleKey, userId);
+        // It is possible to be in only one of the leaderboards.
+        foreach (var key in LeaderboardKeys)
+        {
+            var set = await redis.SortedSetRankAsync(key, userId);
 
-        return result is not null;
+            if (set is not null) return true;
+        }
+
+        return false;
+        /*
+        return LeaderboardKeys.All(key =>
+        {
+            return await redis.SortedSetRankAsync(key, userId) is not null;
+        })
+        */
     }
 
     private async Task NotifyBan(int userId)
@@ -203,9 +228,21 @@ public class Worker : BackgroundService
 
     private async Task FillLeaderboards(IEnumerable<User> users)
     {
+        // Probably should be in the repo but it is what it issss...
+        var redis = _redisConnectionMultiplexer.GetDatabase();
+
         foreach (var user in  users)
         {
-            var stats = await _userStatsRepository.
+            var vn_stats = await _userStatsRepository.GetVanillaUserAsync(user.Id);
+            var rx_stats = await _userStatsRepository.GetRelaxUserAsync(user.Id);
+            var ap_stats = await _userStatsRepository.GetAutopilotUserAsync(user.Id);
+
+            foreach (var key in LeaderboardKeys)
+            {
+                var value = PerformanceKeyLookup[key](vn_stats, rx_stats, ap_stats);
+
+                await redis.SortedSetAddAsync(key, user.Id, value);
+            }
         }
     }
 
