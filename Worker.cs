@@ -241,9 +241,7 @@ public class Worker : BackgroundService
             {
                 string? countryKey = null;
                 if (user.CountryCode != "XX")
-                {
-                    countryKey = $"{key}:{user.CountryCode}";
-                }
+                     countryKey = $"{key}:{user.CountryCode}";
 
                 var value = PerformanceKeyLookup[key](vn_stats, rx_stats, ap_stats);
 
@@ -262,6 +260,25 @@ public class Worker : BackgroundService
         }
     }
 
+    // Mainly to cleanup country lbs which arent always properly cleaned up.
+    private async Task RemoveRestrictedLeaderboards(IEnumerable<User> users)
+    {
+        var redis = _redisConnectionMultiplexer.GetDatabase();
+
+        foreach (var user in users)
+        {
+            foreach (var key in LeaderboardKeys)
+            {
+                string? countryKey = null;
+                if (user.CountryCode != "XX") 
+                    countryKey = $"{key}:{user.CountryCode}";
+
+                await redis.SortedSetRemoveAsync(key , user.Id);
+                if (countryKey is not null) await redis.SortedSetRemoveAsync(countryKey, user.Id);
+            }
+        }
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -275,11 +292,13 @@ public class Worker : BackgroundService
                 user.LatestActivity < (DateTimeOffset.Now - TimeSpan.FromDays(60)).ToUnixTimeSeconds() && !user.Privileges.HasFlag(Privileges.PendingVerification));
 
             var unrestrictedUsers = users.Where(user => user.Privileges.HasFlag(Privileges.Public));
+            var restrictedUsers = users.Where(user => !user.Privileges.HasFlag(Privileges.Public));
 
             await Task.WhenAll(
                 RemoveExpiredDonors(donors),
                 RestrictExpiredFrozenUsers(frozenUsers),
-                FillLeaderboards(unrestrictedUsers)
+                FillLeaderboards(unrestrictedUsers),
+                RemoveRestrictedLeaderboards(restrictedUsers)
             );
 
             await Task.Delay(TimeSpan.FromMinutes(30), stoppingToken);
