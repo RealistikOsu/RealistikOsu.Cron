@@ -5,6 +5,8 @@ using StackExchange.Redis;
 
 namespace RealistikOsu.Cron;
 
+using PerformanceFunction = Func<UserStats, UserStats, UserStats, float>;
+
 public class Worker : BackgroundService
 {
     private readonly string _fokaKey;
@@ -52,6 +54,18 @@ public class Worker : BackgroundService
         "ripple:leaderboard_ap:std"
     };
 
+    private static readonly Dictionary<string, PerformanceFunction> PerformanceKeyLookup = new Dictionary<string, PerformanceFunction>()
+    {
+        { "ripple:leaderboard:std", (vn, rx, ap) => vn.standardPerformancePoints },
+        { "ripple:leaderboard:taiko",  (vn, rx, ap) => vn.taikoPerformancePoints },
+        { "ripple:leaderboard:ctb",  (vn, rx, ap) => vn.catchPerformancePoints },
+        { "ripple:leaderboard:mania",  (vn, rx, ap) => vn.maniaPerformancePoints },
+        { "ripple:leaderboard_relax:std",  (vn, rx, ap) => rx.standardPerformancePoints },
+        { "ripple:leaderboard_relax:taiko",  (vn, rx, ap) => rx.taikoPerformancePoints },
+        { "ripple:leaderboard_relax:ctb",  (vn, rx, ap) => rx.catchPerformancePoints },
+        { "ripple:leaderboard_ap:std",  (vn, rx, ap) => ap.standardPerformancePoints },
+    };
+
     private async Task SendFokabotMessage(Dictionary<string, string> parameters)
     {
         var requestUrl = $"{_banchoApiUrl}/api/v1/fokabotMessage";
@@ -83,10 +97,21 @@ public class Worker : BackgroundService
     {
         var redis = _redisConnectionMultiplexer.GetDatabase();
 
-        var exampleKey = LeaderboardKeys[0];
-        var result = await redis.SortedSetRankAsync(exampleKey, userId);
+        // It is possible to be in only one of the leaderboards.
+        foreach (var key in LeaderboardKeys)
+        {
+            var set = await redis.SortedSetRankAsync(key, userId);
 
-        return result is not null;
+            if (set is not null) return true;
+        }
+
+        return false;
+        /*
+        return LeaderboardKeys.All(key =>
+        {
+            return await redis.SortedSetRankAsync(key, userId) is not null;
+        })
+        */
     }
 
     private async Task NotifyBan(int userId)
@@ -174,12 +199,10 @@ public class Worker : BackgroundService
 
             await _userBadgeRepository.DeleteAsync(user.Id, _donorBadgeId);
 
-            var userStats = new UserStats
-            {
-                Id = user.Id,
-                CanCustomBadge = false,
-                ShowCustomBadge = false
-            };
+            var userStats = await _userStatsRepository.GetVanillaUserAsync(user.Id);
+            userStats.CanCustomBadge = false;
+            userStats.ShowCustomBadge = false;
+
             await _userStatsRepository.UpdateAsync(userStats);
 
             _logger.LogDebug("Removed donor from {user} ({user_id}) as their donor expired at {time}", user.Username, user.Id, user.DonorExpiresAt);
@@ -201,6 +224,62 @@ public class Worker : BackgroundService
         }
     }
 
+    private async Task FillLeaderboards(IEnumerable<User> users)
+    {
+        // Probably should be in the repo but it is what it issss...
+        var redis = _redisConnectionMultiplexer.GetDatabase();
+
+        foreach (var user in  users)
+        {
+            var vn_stats = await _userStatsRepository.GetVanillaUserAsync(user.Id);
+            var rx_stats = await _userStatsRepository.GetRelaxUserAsync(user.Id);
+            var ap_stats = await _userStatsRepository.GetAutopilotUserAsync(user.Id);
+
+            foreach (var key in LeaderboardKeys)
+            {
+                string? countryKey = null;
+                if (user.CountryCode != "XX")
+                     countryKey = $"{key}:{user.CountryCode}";
+
+                var value = PerformanceKeyLookup[key](vn_stats, rx_stats, ap_stats);
+
+                // If we have a zero value, remove them from the lb.
+                if (value == 0)
+                {
+                    await redis.SortedSetRemoveAsync(key, user.Id);
+
+                    if (countryKey is not null) await redis.SortedSetRemoveAsync(countryKey, user.Id);
+                    continue;
+                }
+
+                await redis.SortedSetAddAsync(key, user.Id, value);
+                if (countryKey is not null) await redis.SortedSetAddAsync(countryKey, user.Id, value);
+            }
+        }
+    }
+
+    // Mainly to cleanup country lbs which arent always properly cleaned up.
+    private async Task RemoveRestrictedLeaderboards(IEnumerable<User> users)
+    {
+        var redis = _redisConnectionMultiplexer.GetDatabase();
+
+        foreach (var user in users)
+        {
+            foreach (var key in LeaderboardKeys)
+            {
+                string? countryKey = null;
+                if (user.CountryCode != "XX") 
+                    countryKey = $"{key}:{user.CountryCode}";
+
+                await redis.SortedSetRemoveAsync(key , user.Id);
+                if (countryKey is not null) await redis.SortedSetRemoveAsync(countryKey, user.Id);
+
+                _logger.LogDebug("Removed {user} ({user_id}) from leaderboards due to being restricted.", user.Username, user.Id);
+            }
+        }
+        _logger.LogInformation("Removed {count} restricted users from the leaderboards.", users.Count());
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -213,10 +292,14 @@ public class Worker : BackgroundService
             var inactiveUsers = users.Where(user =>
                 user.LatestActivity < (DateTimeOffset.Now - TimeSpan.FromDays(60)).ToUnixTimeSeconds() && !user.Privileges.HasFlag(Privileges.PendingVerification));
 
+            var unrestrictedUsers = users.Where(user => user.Privileges.HasFlag(Privileges.Public));
+            var restrictedUsers = users.Where(user => !user.Privileges.HasFlag(Privileges.Public));
+
             await Task.WhenAll(
-                RemoveExpiredDonors(donors), 
+                RemoveExpiredDonors(donors),
                 RestrictExpiredFrozenUsers(frozenUsers),
-                RemoveInactiveUsersFromLeaderboard(inactiveUsers)
+                FillLeaderboards(unrestrictedUsers),
+                RemoveRestrictedLeaderboards(restrictedUsers)
             );
 
             await Task.Delay(TimeSpan.FromMinutes(30), stoppingToken);
