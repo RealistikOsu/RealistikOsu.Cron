@@ -32,8 +32,8 @@ public class UserStatsRepository : IUserStatsRepository
             .Select(item => new UserStats
         {
             Id = item.id,
-            CanCustomBadge = item.can_custom_badge == 1,
-            ShowCustomBadge = item.show_custom_badge == 1,
+            CanCustomBadge = item.can_custom_badge ?? false, // Botch for rx and vn which dont have these fields.
+            ShowCustomBadge = item.show_custom_badge ?? false,
             standardPerformancePoints = item.pp_std,
             taikoPerformancePoints = item.pp_taiko,
             catchPerformancePoints = item.pp_ctb,

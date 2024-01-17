@@ -5,8 +5,6 @@ using StackExchange.Redis;
 
 namespace RealistikOsu.Cron;
 
-using PerformanceFunction = Func<UserStats, UserStats, UserStats, float>;
-
 public class Worker : BackgroundService
 {
     private readonly string _fokaKey;
@@ -53,6 +51,8 @@ public class Worker : BackgroundService
         "ripple:leaderboard_relax:ctb",
         "ripple:leaderboard_ap:std"
     };
+
+    private delegate float PerformanceFunction(UserStats vn, UserStats rx, UserStats ap);
 
     private static readonly Dictionary<string, PerformanceFunction> PerformanceKeyLookup = new Dictionary<string, PerformanceFunction>()
     {
