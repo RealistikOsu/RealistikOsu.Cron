@@ -199,12 +199,10 @@ public class Worker : BackgroundService
 
             await _userBadgeRepository.DeleteAsync(user.Id, _donorBadgeId);
 
-            var userStats = new UserStats
-            {
-                Id = user.Id,
-                CanCustomBadge = false,
-                ShowCustomBadge = false
-            };
+            var userStats = await _userStatsRepository.GetVanillaUserAsync(user.Id);
+            userStats.CanCustomBadge = false;
+            userStats.ShowCustomBadge = false;
+
             await _userStatsRepository.UpdateAsync(userStats);
 
             _logger.LogDebug("Removed donor from {user} ({user_id}) as their donor expired at {time}", user.Username, user.Id, user.DonorExpiresAt);
