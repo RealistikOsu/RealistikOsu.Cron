@@ -263,6 +263,8 @@ public class Worker : BackgroundService
     {
         var redis = _redisConnectionMultiplexer.GetDatabase();
 
+        var deletedUsers = 0;
+
         foreach (var user in users)
         {
             foreach (var key in LeaderboardKeys)
@@ -271,13 +273,12 @@ public class Worker : BackgroundService
                 if (user.CountryCode != "XX") 
                     countryKey = $"{key}:{user.CountryCode}";
 
-                await redis.SortedSetRemoveAsync(key , user.Id);
+                if (await redis.SortedSetRemoveAsync(key, user.Id)) deletedUsers++;
                 if (countryKey is not null) await redis.SortedSetRemoveAsync(countryKey, user.Id);
 
-                _logger.LogDebug("Removed {user} ({user_id}) from leaderboards due to being restricted.", user.Username, user.Id);
             }
         }
-        _logger.LogInformation("Removed {count} restricted users from the leaderboards.", users.Count());
+        _logger.LogInformation("Removed {count} restricted users from the leaderboards.", deletedUsers);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
