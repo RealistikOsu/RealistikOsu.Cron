@@ -10,7 +10,7 @@ builder.Configuration.AddEnvironmentVariables();
 
 var redisConnectionMultiplexer = ConnectionMultiplexer.Connect(new ConfigurationOptions
 {
-    EndPoints = { "localhost" }
+    EndPoints = { builder.Configuration["RedisUri"] }
 });
 builder.Services.AddSingleton(redisConnectionMultiplexer);
 
