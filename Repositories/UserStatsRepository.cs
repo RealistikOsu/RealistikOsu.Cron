@@ -13,39 +13,26 @@ public class UserStatsRepository : IUserStatsRepository
         _dbContext = dbContext;
     }
 
-    public async Task UpdateAsync(UserStats userStats)
+    public async Task<UserStats?> GetAsync(int userId, int mode)
     {
         const string query =
-            "UPDATE users_stats SET can_custom_badge = @CanCustomBadge, show_custom_badge = @ShowCustombadge, pp_std = @standardPerformancePoints, " +
-            "pp_mania = @maniaPerformancePoints, pp_ctb = @catchPerformancePoints, pp_taiko = @taikoPerformancePoints WHERE id = @Id";
+            "SELECT user_id AS UserId, mode AS Mode, ranked_score AS RankedScore, " +
+            "total_score AS TotalScore, pp AS Pp, accuracy AS Accuracy, playcount AS Playcount, " +
+            "playtime AS Playtime, total_hits AS TotalHits, max_combo AS MaxCombo, " +
+            "replays_watched AS ReplaysWatched, level AS Level, count_ssh AS CountSsh, " +
+            "count_ss AS CountSs, count_sh AS CountSh, count_s AS CountS, count_a AS CountA " +
+            "FROM user_stats WHERE user_id = @userId AND mode = @mode";
 
         using var connection = _dbContext.CreateConnection();
-        await connection.ExecuteAsync(query, userStats);
+        return await connection.QueryFirstOrDefaultAsync<UserStats>(query, new { userId, mode });
     }
 
-    private async Task<UserStats> GetFromTable(int userId, string table)
+    public async Task ClearCustomBadgeAsync(int userId)
     {
-        string query = $"SELECT * FROM {table} WHERE id = @userId";
+        const string query =
+            "UPDATE user_settings SET can_custom_badge = 0, show_custom_badge = 0 WHERE user_id = @userId";
 
         using var connection = _dbContext.CreateConnection();
-        var user = (await connection.QueryAsync<dynamic>(query, new { userId }))
-            .Select(item => new UserStats
-        {
-            Id = item.id,
-            CanCustomBadge = item.can_custom_badge ?? false, // Botch for rx and vn which dont have these fields.
-            ShowCustomBadge = item.show_custom_badge ?? false,
-            standardPerformancePoints = item.pp_std,
-            taikoPerformancePoints = item.pp_taiko,
-            catchPerformancePoints = item.pp_ctb,
-            maniaPerformancePoints = item.pp_mania
-        }).Single();
-
-        return user;
+        await connection.ExecuteAsync(query, new { userId });
     }
-
-    public async Task<UserStats> GetVanillaUserAsync(int userId) => await GetFromTable(userId, "users_stats");
-
-    public async Task<UserStats> GetRelaxUserAsync(int userId) => await GetFromTable(userId, "rx_stats");
-
-    public async Task<UserStats> GetAutopilotUserAsync(int userId) => await GetFromTable(userId, "ap_stats");
 }
