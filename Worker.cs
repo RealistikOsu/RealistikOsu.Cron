@@ -126,31 +126,19 @@ public class Worker : BackgroundService
         if (newBest is null)
             return;
 
-        var firstPlace = new FirstPlace
+        await _firstPlaceRepository.CreateAsync(new FirstPlace
         {
+            BeatmapMd5 = beatmapMd5,
+            Mode = CombinedMode(mode, relax),
             ScoreId = newBest.Id,
             UserId = newBest.UserId,
-            Score = newBest.PlayScore,
-            MaxCombo = newBest.MaxCombo,
-            FullCombo = newBest.FullCombo,
-            Mods = newBest.Mods,
-            Count300 = newBest.Count300,
-            Count100 = newBest.Count100,
-            Count50 = newBest.Count50,
-            CountKatu = newBest.CountKatu,
-            CountGeki = newBest.CountGeki,
-            CountMiss = newBest.CountMiss,
-            SubmittedAt = newBest.SubmittedAt,
-            Mode = newBest.Mode,
-            Completed = newBest.Completed,
-            Accuracy = newBest.Accuracy,
             PerformancePoints = newBest.PerformancePoints,
-            PlayTime = newBest.PlayTime,
-            BeatmapMd5 = newBest.BeatmapMd5,
-            Relax = relax
-        };
-        await _firstPlaceRepository.CreateAsync(firstPlace);
+        });
     }
+
+    // Combined mode: vanilla 0-3, relax 4-6, autopilot 7.
+    private static int CombinedMode(int mode, int relax) =>
+        relax == 2 ? 7 : relax == 1 ? 4 + mode : mode;
     
     private async Task RestrictExpiredFrozenUsers(IEnumerable<User> frozenUsers)
     {

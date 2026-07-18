@@ -15,34 +15,13 @@ public class FirstPlaceRepository : IFirstPlaceRepository
 
     public async Task<List<FirstPlace>> GetAllByUserAsync(int userId)
     {
-        const string query = "SELECT *, `300_count` as count_300, `100_count` as count_100, `50_count` as count_50 FROM first_places";
+        const string query =
+            "SELECT beatmap_md5 AS BeatmapMd5, mode AS Mode, score_id AS ScoreId, " +
+            "user_id AS UserId, pp AS PerformancePoints " +
+            "FROM first_places WHERE user_id = @userId";
 
         using var connection = _dbContext.CreateConnection();
-        var firstPlaces = (await connection.QueryAsync<dynamic>(query))
-            .Select(item => new FirstPlace
-            {
-                Id = item.id,
-                ScoreId = item.score_id,
-                UserId = item.user_id,
-                Score = item.score,
-                MaxCombo = item.max_combo,
-                FullCombo = (bool)item.full_combo,
-                Mods = item.mods,
-                Count300 = item.count_300,
-                Count100 = item.count_100,
-                Count50 = item.count_50,
-                CountKatu = item.ckatus_count,
-                CountGeki = item.cgekis_count,
-                CountMiss = item.miss_count,
-                SubmittedAt = item.timestamp,
-                Mode = item.mode,
-                Completed = item.completed,
-                Accuracy = item.accuracy,
-                PerformancePoints = item.pp,
-                PlayTime = item.play_time,
-                BeatmapMd5 = item.beatmap_md5,
-                Relax = item.relax,
-            });
+        var firstPlaces = await connection.QueryAsync<FirstPlace>(query, new { userId });
 
         return firstPlaces.ToList();
     }
@@ -50,18 +29,17 @@ public class FirstPlaceRepository : IFirstPlaceRepository
     public async Task CreateAsync(FirstPlace firstPlace)
     {
         const string query =
-            @"INSERT INTO first_places (score_id, user_id, score, max_combo, full_combo, mods, `300_count`, `100_count`, `50_count`, 
-                          ckatus_count, cgekis_count, miss_count, timestamp, mode, completed, accuracy, pp, play_time, beatmap_md5, relax) 
-            VALUES (@ScoreId, @UserId, @Score, @MaxCombo, @FullCombo, @Mods, @Count300, @Count100, @Count50, @CountKatu, @CountGeki, @CountMiss, 
-                    @SubmittedAt, @Mode, @Completed, @Accuracy, @PerformancePoints, @PlayTime, @BeatmapMd5, @Relax)";
-        
+            "REPLACE INTO first_places (beatmap_md5, mode, score_id, user_id, pp) " +
+            "VALUES (@BeatmapMd5, @Mode, @ScoreId, @UserId, @PerformancePoints)";
+
         using var connection = _dbContext.CreateConnection();
         await connection.ExecuteAsync(query, firstPlace);
     }
 
     public async Task DeleteAsync(FirstPlace firstPlace)
     {
-        const string query = "DELETE FROM first_places WHERE id = @Id";
+        const string query =
+            "DELETE FROM first_places WHERE beatmap_md5 = @BeatmapMd5 AND mode = @Mode";
 
         using var connection = _dbContext.CreateConnection();
         await connection.ExecuteAsync(query, firstPlace);
