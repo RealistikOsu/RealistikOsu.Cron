@@ -2,7 +2,7 @@ namespace RealistikOsu.Cron.Entities;
 
 public class Score
 {
-    public required int Id { get; init; }
+    public required long Id { get; init; }
     public required int UserId { get; init; }
     public required long PlayScore { get; init; }
     public required int MaxCombo { get; init; }
@@ -14,7 +14,7 @@ public class Score
     public required int CountKatu { get; init; }
     public required int CountGeki { get; init; }
     public required int CountMiss { get; init; }
-    public required int SubmittedAt { get; init; }
+    public required long SubmittedAt { get; init; }
     public required int Mode { get; init; }
     public required int Completed { get; init; }
     public required float Accuracy { get; init; }
