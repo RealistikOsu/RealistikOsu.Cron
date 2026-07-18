@@ -10,6 +10,7 @@ public class Worker : BackgroundService
     private readonly string _fokaKey;
     private readonly string _banchoApiUrl;
     private readonly int _donorBadgeId;
+    private readonly int _botId;
 
     private readonly HttpClient _httpClient;
 
@@ -23,13 +24,14 @@ public class Worker : BackgroundService
 
     public Worker(ILogger<Worker> logger, IConfiguration configuration, IUserRepository userRepository,
         ConnectionMultiplexer redisConnectionMultiplexer, IFirstPlaceRepository firstPlaceRepository,
-        IScoreRepository scoreRepository, IUserBadgeRepository userBadgeRepository, 
+        IScoreRepository scoreRepository, IUserBadgeRepository userBadgeRepository,
         IUserStatsRepository userStatsRepository)
     {
         _fokaKey = configuration.GetValue<string>("FokaKey") ?? string.Empty;
         _banchoApiUrl = configuration.GetValue<string>("BanchoApiUrl")!;
         _donorBadgeId = configuration.GetValue<int>("DonorBadgeId");
-        
+        _botId = configuration.GetValue<int?>("BotId") ?? 999;
+
         _httpClient = new HttpClient();
 
         _logger = logger;
@@ -52,18 +54,18 @@ public class Worker : BackgroundService
         "ripple:leaderboard_ap:std"
     };
 
-    private delegate float PerformanceFunction(UserStats vn, UserStats rx, UserStats ap);
-
-    private static readonly Dictionary<string, PerformanceFunction> PerformanceKeyLookup = new Dictionary<string, PerformanceFunction>()
+    // Each redis leaderboard maps to a combined mode in the tall user_stats table
+    // (vanilla 0-3, relax 4-6, autopilot 7).
+    private static readonly Dictionary<string, int> LeaderboardModeLookup = new()
     {
-        { "ripple:leaderboard:std", (vn, rx, ap) => vn.standardPerformancePoints },
-        { "ripple:leaderboard:taiko",  (vn, rx, ap) => vn.taikoPerformancePoints },
-        { "ripple:leaderboard:ctb",  (vn, rx, ap) => vn.catchPerformancePoints },
-        { "ripple:leaderboard:mania",  (vn, rx, ap) => vn.maniaPerformancePoints },
-        { "ripple:leaderboard_relax:std",  (vn, rx, ap) => rx.standardPerformancePoints },
-        { "ripple:leaderboard_relax:taiko",  (vn, rx, ap) => rx.taikoPerformancePoints },
-        { "ripple:leaderboard_relax:ctb",  (vn, rx, ap) => rx.catchPerformancePoints },
-        { "ripple:leaderboard_ap:std",  (vn, rx, ap) => ap.standardPerformancePoints },
+        { "ripple:leaderboard:std", 0 },
+        { "ripple:leaderboard:taiko", 1 },
+        { "ripple:leaderboard:ctb", 2 },
+        { "ripple:leaderboard:mania", 3 },
+        { "ripple:leaderboard_relax:std", 4 },
+        { "ripple:leaderboard_relax:taiko", 5 },
+        { "ripple:leaderboard_relax:ctb", 6 },
+        { "ripple:leaderboard_ap:std", 7 },
     };
 
     private async Task SendFokabotMessage(Dictionary<string, string> parameters)
@@ -75,18 +77,18 @@ public class Worker : BackgroundService
         {
             builder.AddParameter(kvp.Key, kvp.Value);
         }
-        
+
         await _httpClient.GetAsync(builder.Uri);
     }
 
     private async Task RemoveUserFromLeaderboard(int userId, string countryCode)
     {
         var redis = _redisConnectionMultiplexer.GetDatabase();
-            
+
         foreach (var leaderboardKey in LeaderboardKeys)
         {
             await redis.SortedSetRemoveAsync(leaderboardKey, userId);
-                
+
             var countryKey = $"{leaderboardKey}:{countryCode}";
             if (countryCode != "XX")
                 await redis.SortedSetRemoveAsync(countryKey, userId);
@@ -139,63 +141,66 @@ public class Worker : BackgroundService
     // Combined mode: vanilla 0-3, relax 4-6, autopilot 7.
     private static int CombinedMode(int mode, int relax) =>
         relax == 2 ? 7 : relax == 1 ? 4 + mode : mode;
-    
-    private async Task RestrictExpiredFrozenUsers(IEnumerable<User> frozenUsers)
+
+    // first_places.Mode is combined 0-7; split back for RecalculateFirstPlace's (mode, relax) signature.
+    private static int RelaxFromMode(int m) => m == 7 ? 2 : m >= 4 ? 1 : 0;
+    private static int BaseModeFromMode(int m) => m == 7 ? 0 : m >= 4 ? m - 4 : m;
+
+    private async Task RestrictExpiredFrozenUsers(IEnumerable<int> expiredFrozenIds, IEnumerable<User> allUsers)
     {
-        var usersToRestrict = frozenUsers.Where(user => user.FreezeExpiresAt < DateTimeOffset.Now.ToUnixTimeSeconds()).ToArray();
+        var ids = expiredFrozenIds.ToArray();
+        var byId = allUsers.ToDictionary(u => u.Id);
 
-        foreach (var user in usersToRestrict)
+        foreach (var userId in ids)
         {
-            user.Privileges &= ~Privileges.Public;
-            user.BannedAt = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
-            user.BanReason = "Expired freeze timer (Cron)";
-            await _userRepository.UpdateAsync(user);
+            // infraction (type 0) + public = 0 + deactivate the freeze row.
+            await _userRepository.RestrictForExpiredFreezeAsync(userId, _botId);
 
-            var parameters = new Dictionary<string, string>
+            if (byId.TryGetValue(userId, out var user))
             {
-                ["k"] = _fokaKey,
-                ["to"] = user.Username,
-                ["msg"] =
-                    "Your account has been restricted! Check with staff to see whats up." // matching panel message
-            };
-            await SendFokabotMessage(parameters);
+                var parameters = new Dictionary<string, string>
+                {
+                    ["k"] = _fokaKey,
+                    ["to"] = user.Username,
+                    ["msg"] =
+                        "Your account has been restricted! Check with staff to see whats up." // matching panel message
+                };
+                await SendFokabotMessage(parameters);
 
-            await RemoveUserFromLeaderboard(user.Id, user.CountryCode);
-            await NotifyBan(user.Id);
+                await RemoveUserFromLeaderboard(userId, user.CountryCode);
+            }
 
-            var firstPlaces = await _firstPlaceRepository.GetAllByUserAsync(user.Id);
+            await NotifyBan(userId);
+
+            var firstPlaces = await _firstPlaceRepository.GetAllByUserAsync(userId);
             foreach (var firstPlace in firstPlaces)
             {
                 await _firstPlaceRepository.DeleteAsync(firstPlace);
-                await RecalculateFirstPlace(firstPlace.BeatmapMd5, firstPlace.Relax, firstPlace.Mode);
+                await RecalculateFirstPlace(firstPlace.BeatmapMd5, RelaxFromMode(firstPlace.Mode), BaseModeFromMode(firstPlace.Mode));
             }
 
-            _logger.LogDebug("Restricted {user} ({user_id}) as their freeze timer expired at {time}", user.Username, user.Id, user.FreezeExpiresAt);
+            _logger.LogDebug("Restricted user ({user_id}) as their freeze timer expired", userId);
         }
-        
-        _logger.LogInformation("Restricted {count} users for expired freeze timers", usersToRestrict.Length);
+
+        _logger.LogInformation("Restricted {count} users for expired freeze timers", ids.Length);
     }
 
     private async Task RemoveExpiredDonors(IEnumerable<User> donors)
     {
-        var expiredDonors = donors.Where(user => user.DonorExpiresAt < DateTimeOffset.Now.ToUnixTimeSeconds()).ToArray();
+        var expiredDonors = donors.ToArray();
 
         foreach (var user in expiredDonors)
         {
             user.Privileges &= ~Privileges.Donor;
+            user.DonorEnd = null;
             await _userRepository.UpdateAsync(user);
 
             await _userBadgeRepository.DeleteAsync(user.Id, _donorBadgeId);
+            await _userStatsRepository.ClearCustomBadgeAsync(user.Id); // cosmetics now in user_settings
 
-            var userStats = await _userStatsRepository.GetVanillaUserAsync(user.Id);
-            userStats.CanCustomBadge = false;
-            userStats.ShowCustomBadge = false;
-
-            await _userStatsRepository.UpdateAsync(userStats);
-
-            _logger.LogDebug("Removed donor from {user} ({user_id}) as their donor expired at {time}", user.Username, user.Id, user.DonorExpiresAt);
+            _logger.LogDebug("Removed donor from {user} ({user_id}) as their donor expired", user.Username, user.Id);
         }
-        
+
         _logger.LogInformation("Removed donor from {count} users as their donor expired", expiredDonors.Length);
     }
 
@@ -219,17 +224,14 @@ public class Worker : BackgroundService
 
         foreach (var user in  users)
         {
-            var vn_stats = await _userStatsRepository.GetVanillaUserAsync(user.Id);
-            var rx_stats = await _userStatsRepository.GetRelaxUserAsync(user.Id);
-            var ap_stats = await _userStatsRepository.GetAutopilotUserAsync(user.Id);
-
             foreach (var key in LeaderboardKeys)
             {
                 string? countryKey = null;
                 if (user.CountryCode != "XX")
                      countryKey = $"{key}:{user.CountryCode}";
 
-                var value = PerformanceKeyLookup[key](vn_stats, rx_stats, ap_stats);
+                var stats = await _userStatsRepository.GetAsync(user.Id, LeaderboardModeLookup[key]);
+                var value = stats?.Pp ?? 0;
 
                 // If we have a zero value, remove them from the lb.
                 if (value == 0)
@@ -258,7 +260,7 @@ public class Worker : BackgroundService
             foreach (var key in LeaderboardKeys)
             {
                 string? countryKey = null;
-                if (user.CountryCode != "XX") 
+                if (user.CountryCode != "XX")
                     countryKey = $"{key}:{user.CountryCode}";
 
                 if (await redis.SortedSetRemoveAsync(key, user.Id)) deletedUsers++;
@@ -276,19 +278,25 @@ public class Worker : BackgroundService
             _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
 
             var users = await _userRepository.GetAllAsync();
-            var donors = users.Where(user => user.Privileges.HasFlag(Privileges.Donor));
-            var frozenUsers = users.Where(user => user.Frozen && user.Privileges.HasFlag(Privileges.Public));
+            var donors = users.Where(user =>
+                user.Privileges.HasFlag(Privileges.Donor) &&
+                user.DonorEnd is not null &&
+                user.DonorEnd < DateTime.UtcNow);
+            var expiredFrozenIds = await _userRepository.GetExpiredFrozenUserIdsAsync();
             var inactiveUsers = users.Where(user =>
-                user.LatestActivity < (DateTimeOffset.Now - TimeSpan.FromDays(60)).ToUnixTimeSeconds() && !user.Privileges.HasFlag(Privileges.PendingVerification));
+                user.LatestActivity is not null &&
+                user.LatestActivity < DateTime.UtcNow.AddDays(-60) &&
+                user.Privileges.HasFlag(Privileges.Activated)); // not pending
 
-            var unrestrictedUsers = users.Where(user => user.Privileges.HasFlag(Privileges.Public));
-            var restrictedUsers = users.Where(user => !user.Privileges.HasFlag(Privileges.Public));
+            var unrestrictedUsers = users.Where(user => user.Public);
+            var restrictedUsers = users.Where(user => !user.Public);
 
             await Task.WhenAll(
                 RemoveExpiredDonors(donors),
-                RestrictExpiredFrozenUsers(frozenUsers),
+                RestrictExpiredFrozenUsers(expiredFrozenIds, users),
                 FillLeaderboards(unrestrictedUsers),
-                RemoveRestrictedLeaderboards(restrictedUsers)
+                RemoveRestrictedLeaderboards(restrictedUsers),
+                RemoveInactiveUsersFromLeaderboard(inactiveUsers) // was computed but never called; now runs
             );
 
             await Task.Delay(TimeSpan.FromMinutes(30), stoppingToken);
