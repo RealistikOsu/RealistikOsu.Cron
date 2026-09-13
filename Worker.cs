@@ -87,7 +87,7 @@ public class Worker : BackgroundService
         {
             await redis.SortedSetRemoveAsync(leaderboardKey, userId);
                 
-            var countryKey = $"{leaderboardKey}:{countryCode}";
+            var countryKey = $"{leaderboardKey}:{countryCode.ToLower()}";
             if (countryCode != "XX")
                 await redis.SortedSetRemoveAsync(countryKey, userId);
         }
@@ -229,6 +229,13 @@ public class Worker : BackgroundService
         // Probably should be in the repo but it is what it issss...
         var redis = _redisConnectionMultiplexer.GetDatabase();
 
+        // hanayo:country_list backs the country tabs on the leaderboard page
+        // (core/funcmap.go's countryList). Rebuilt from scratch every cycle,
+        // same as the old python cron: incremented once per user per
+        // mode/relax combo they have a nonzero leaderboard value in, so it
+        // reflects activity rather than raw population.
+        await redis.KeyDeleteAsync("hanayo:country_list");
+
         foreach (var user in  users)
         {
             var vn_stats = await _userStatsRepository.GetVanillaUserAsync(user.Id);
@@ -239,7 +246,7 @@ public class Worker : BackgroundService
             {
                 string? countryKey = null;
                 if (user.CountryCode != "XX")
-                     countryKey = $"{key}:{user.CountryCode}";
+                     countryKey = $"{key}:{user.CountryCode.ToLower()}";
 
                 var value = PerformanceKeyLookup[key](vn_stats, rx_stats, ap_stats);
 
@@ -254,6 +261,9 @@ public class Worker : BackgroundService
 
                 await redis.SortedSetAddAsync(key, user.Id, value);
                 if (countryKey is not null) await redis.SortedSetAddAsync(countryKey, user.Id, value);
+
+                if (user.CountryCode != "XX")
+                    await redis.SortedSetIncrementAsync("hanayo:country_list", user.CountryCode.ToLower(), 1);
             }
         }
     }
@@ -270,8 +280,8 @@ public class Worker : BackgroundService
             foreach (var key in LeaderboardKeys)
             {
                 string? countryKey = null;
-                if (user.CountryCode != "XX") 
-                    countryKey = $"{key}:{user.CountryCode}";
+                if (user.CountryCode != "XX")
+                    countryKey = $"{key}:{user.CountryCode.ToLower()}";
 
                 if (await redis.SortedSetRemoveAsync(key, user.Id)) deletedUsers++;
                 if (countryKey is not null) await redis.SortedSetRemoveAsync(countryKey, user.Id);
@@ -281,8 +291,28 @@ public class Worker : BackgroundService
         _logger.LogInformation("Removed {count} restricted users from the leaderboards.", deletedUsers);
     }
 
+    // One-time cleanup of orphaned uppercase-suffixed country leaderboard
+    // keys (e.g. ripple:leaderboard:std:US) written before FillLeaderboards
+    // started lowercasing the country code to match every reader. Safe to
+    // leave in permanently - a no-op once they're gone.
+    private async Task CleanupLegacyUppercaseCountryKeys()
+    {
+        var endpoint = _redisConnectionMultiplexer.GetEndPoints().First();
+        var server = _redisConnectionMultiplexer.GetServer(endpoint);
+        var redis = _redisConnectionMultiplexer.GetDatabase();
+
+        var keys = server.Keys(pattern: "ripple:leaderboard*:[A-Z][A-Z]").ToArray();
+        if (keys.Length == 0)
+            return;
+
+        await redis.KeyDeleteAsync(keys);
+        _logger.LogInformation("Cleaned up {count} orphaned uppercase-suffixed country leaderboard keys.", keys.Length);
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await CleanupLegacyUppercaseCountryKeys();
+
         while (!stoppingToken.IsCancellationRequested)
         {
             _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
