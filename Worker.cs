@@ -321,15 +321,19 @@ public class Worker : BackgroundService
             var donors = users.Where(user => user.Privileges.HasFlag(Privileges.Donor));
             var frozenUsers = users.Where(user => user.Frozen && user.Privileges.HasFlag(Privileges.Public));
             var inactiveUsers = users.Where(user =>
-                user.LatestActivity < (DateTimeOffset.Now - TimeSpan.FromDays(60)).ToUnixTimeSeconds() && !user.Privileges.HasFlag(Privileges.PendingVerification));
+                user.LatestActivity < (DateTimeOffset.Now - TimeSpan.FromDays(60)).ToUnixTimeSeconds() && !user.Privileges.HasFlag(Privileges.PendingVerification)).ToHashSet();
 
-            var unrestrictedUsers = users.Where(user => user.Privileges.HasFlag(Privileges.Public));
+            // Inactive players are left out of the refill too, otherwise it puts them straight back every
+            // cycle. Logging in bumps latest_activity, so a returning player is back within one cycle.
+            var activeUsers = users.Where(user =>
+                user.Privileges.HasFlag(Privileges.Public) && !inactiveUsers.Contains(user));
             var restrictedUsers = users.Where(user => !user.Privileges.HasFlag(Privileges.Public));
 
             await Task.WhenAll(
                 RemoveExpiredDonors(donors),
                 RestrictExpiredFrozenUsers(frozenUsers),
-                FillLeaderboards(unrestrictedUsers),
+                FillLeaderboards(activeUsers),
+                RemoveInactiveUsersFromLeaderboard(inactiveUsers),
                 RemoveRestrictedLeaderboards(restrictedUsers)
             );
 
