@@ -53,8 +53,8 @@ public class UserStatsRepository : IUserStatsRepository
     public async Task<UserStats> GetAutopilotUserAsync(int userId) => await GetFromTable(userId, "ap_stats");
 
     // Players who never played lazer have no row.
-    public async Task<UserStats> GetLazerUserAsync(int userId) =>
-        await FindInTable(userId, "lazer_stats") ?? new UserStats
+    private async Task<UserStats> GetLazerFromTable(int userId, string table) =>
+        await FindInTable(userId, table) ?? new UserStats
         {
             Id = userId,
             CanCustomBadge = false,
@@ -64,4 +64,10 @@ public class UserStatsRepository : IUserStatsRepository
             catchPerformancePoints = 0,
             maniaPerformancePoints = 0
         };
+
+    public async Task<UserStats> GetLazerUserAsync(int userId) => await GetLazerFromTable(userId, "lazer_stats");
+
+    public async Task<UserStats> GetLazerRelaxUserAsync(int userId) => await GetLazerFromTable(userId, "lazer_rx_stats");
+
+    public async Task<UserStats> GetLazerAutopilotUserAsync(int userId) => await GetLazerFromTable(userId, "lazer_ap_stats");
 }

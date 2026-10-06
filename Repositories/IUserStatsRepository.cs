@@ -9,4 +9,6 @@ public interface IUserStatsRepository
     Task<UserStats> GetRelaxUserAsync(int userId);
     Task<UserStats> GetAutopilotUserAsync(int userId);
     Task<UserStats> GetLazerUserAsync(int userId);
+    Task<UserStats> GetLazerRelaxUserAsync(int userId);
+    Task<UserStats> GetLazerAutopilotUserAsync(int userId);
 }

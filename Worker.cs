@@ -53,25 +53,33 @@ public class Worker : BackgroundService
         "ripple:leaderboard_lazer:std",
         "ripple:leaderboard_lazer:taiko",
         "ripple:leaderboard_lazer:ctb",
-        "ripple:leaderboard_lazer:mania"
+        "ripple:leaderboard_lazer:mania",
+        "ripple:leaderboard_lazer_relax:std",
+        "ripple:leaderboard_lazer_relax:taiko",
+        "ripple:leaderboard_lazer_relax:ctb",
+        "ripple:leaderboard_lazer_ap:std"
     };
 
-    private delegate float PerformanceFunction(UserStats vn, UserStats rx, UserStats ap, UserStats lz);
+    private delegate float PerformanceFunction(UserStats vn, UserStats rx, UserStats ap, UserStats lz, UserStats lzRx, UserStats lzAp);
 
     private static readonly Dictionary<string, PerformanceFunction> PerformanceKeyLookup = new Dictionary<string, PerformanceFunction>()
     {
-        { "ripple:leaderboard:std", (vn, rx, ap, lz) => vn.standardPerformancePoints },
-        { "ripple:leaderboard:taiko",  (vn, rx, ap, lz) => vn.taikoPerformancePoints },
-        { "ripple:leaderboard:ctb",  (vn, rx, ap, lz) => vn.catchPerformancePoints },
-        { "ripple:leaderboard:mania",  (vn, rx, ap, lz) => vn.maniaPerformancePoints },
-        { "ripple:leaderboard_relax:std",  (vn, rx, ap, lz) => rx.standardPerformancePoints },
-        { "ripple:leaderboard_relax:taiko",  (vn, rx, ap, lz) => rx.taikoPerformancePoints },
-        { "ripple:leaderboard_relax:ctb",  (vn, rx, ap, lz) => rx.catchPerformancePoints },
-        { "ripple:leaderboard_ap:std",  (vn, rx, ap, lz) => ap.standardPerformancePoints },
-        { "ripple:leaderboard_lazer:std",  (vn, rx, ap, lz) => lz.standardPerformancePoints },
-        { "ripple:leaderboard_lazer:taiko",  (vn, rx, ap, lz) => lz.taikoPerformancePoints },
-        { "ripple:leaderboard_lazer:ctb",  (vn, rx, ap, lz) => lz.catchPerformancePoints },
-        { "ripple:leaderboard_lazer:mania",  (vn, rx, ap, lz) => lz.maniaPerformancePoints },
+        { "ripple:leaderboard:std", (vn, rx, ap, lz, lzRx, lzAp) => vn.standardPerformancePoints },
+        { "ripple:leaderboard:taiko",  (vn, rx, ap, lz, lzRx, lzAp) => vn.taikoPerformancePoints },
+        { "ripple:leaderboard:ctb",  (vn, rx, ap, lz, lzRx, lzAp) => vn.catchPerformancePoints },
+        { "ripple:leaderboard:mania",  (vn, rx, ap, lz, lzRx, lzAp) => vn.maniaPerformancePoints },
+        { "ripple:leaderboard_relax:std",  (vn, rx, ap, lz, lzRx, lzAp) => rx.standardPerformancePoints },
+        { "ripple:leaderboard_relax:taiko",  (vn, rx, ap, lz, lzRx, lzAp) => rx.taikoPerformancePoints },
+        { "ripple:leaderboard_relax:ctb",  (vn, rx, ap, lz, lzRx, lzAp) => rx.catchPerformancePoints },
+        { "ripple:leaderboard_ap:std",  (vn, rx, ap, lz, lzRx, lzAp) => ap.standardPerformancePoints },
+        { "ripple:leaderboard_lazer:std",  (vn, rx, ap, lz, lzRx, lzAp) => lz.standardPerformancePoints },
+        { "ripple:leaderboard_lazer:taiko",  (vn, rx, ap, lz, lzRx, lzAp) => lz.taikoPerformancePoints },
+        { "ripple:leaderboard_lazer:ctb",  (vn, rx, ap, lz, lzRx, lzAp) => lz.catchPerformancePoints },
+        { "ripple:leaderboard_lazer:mania",  (vn, rx, ap, lz, lzRx, lzAp) => lz.maniaPerformancePoints },
+        { "ripple:leaderboard_lazer_relax:std",  (vn, rx, ap, lz, lzRx, lzAp) => lzRx.standardPerformancePoints },
+        { "ripple:leaderboard_lazer_relax:taiko",  (vn, rx, ap, lz, lzRx, lzAp) => lzRx.taikoPerformancePoints },
+        { "ripple:leaderboard_lazer_relax:ctb",  (vn, rx, ap, lz, lzRx, lzAp) => lzRx.catchPerformancePoints },
+        { "ripple:leaderboard_lazer_ap:std",  (vn, rx, ap, lz, lzRx, lzAp) => lzAp.standardPerformancePoints },
     };
 
     private async Task SendFokabotMessage(Dictionary<string, string> parameters)
@@ -250,6 +258,8 @@ public class Worker : BackgroundService
             var rx_stats = await _userStatsRepository.GetRelaxUserAsync(user.Id);
             var ap_stats = await _userStatsRepository.GetAutopilotUserAsync(user.Id);
             var lazer_stats = await _userStatsRepository.GetLazerUserAsync(user.Id);
+            var lazer_rx_stats = await _userStatsRepository.GetLazerRelaxUserAsync(user.Id);
+            var lazer_ap_stats = await _userStatsRepository.GetLazerAutopilotUserAsync(user.Id);
 
             foreach (var key in LeaderboardKeys)
             {
@@ -257,7 +267,7 @@ public class Worker : BackgroundService
                 if (user.CountryCode != "XX")
                      countryKey = $"{key}:{user.CountryCode.ToLower()}";
 
-                var value = PerformanceKeyLookup[key](vn_stats, rx_stats, ap_stats, lazer_stats);
+                var value = PerformanceKeyLookup[key](vn_stats, rx_stats, ap_stats, lazer_stats, lazer_rx_stats, lazer_ap_stats);
 
                 // If we have a zero value, remove them from the lb.
                 if (value == 0)
