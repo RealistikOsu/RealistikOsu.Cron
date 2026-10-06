@@ -23,7 +23,7 @@ public class UserStatsRepository : IUserStatsRepository
         await connection.ExecuteAsync(query, userStats);
     }
 
-    private async Task<UserStats> GetFromTable(int userId, string table)
+    private async Task<UserStats?> FindInTable(int userId, string table)
     {
         string query = $"SELECT * FROM {table} WHERE id = @userId";
 
@@ -38,14 +38,30 @@ public class UserStatsRepository : IUserStatsRepository
             taikoPerformancePoints = item.pp_taiko,
             catchPerformancePoints = item.pp_ctb,
             maniaPerformancePoints = item.pp_mania
-        }).Single();
+        }).SingleOrDefault();
 
         return user;
     }
+
+    private async Task<UserStats> GetFromTable(int userId, string table) =>
+        await FindInTable(userId, table) ?? throw new InvalidOperationException($"No row in {table} for user {userId}");
 
     public async Task<UserStats> GetVanillaUserAsync(int userId) => await GetFromTable(userId, "users_stats");
 
     public async Task<UserStats> GetRelaxUserAsync(int userId) => await GetFromTable(userId, "rx_stats");
 
     public async Task<UserStats> GetAutopilotUserAsync(int userId) => await GetFromTable(userId, "ap_stats");
+
+    // Players who never played lazer have no row.
+    public async Task<UserStats> GetLazerUserAsync(int userId) =>
+        await FindInTable(userId, "lazer_stats") ?? new UserStats
+        {
+            Id = userId,
+            CanCustomBadge = false,
+            ShowCustomBadge = false,
+            standardPerformancePoints = 0,
+            taikoPerformancePoints = 0,
+            catchPerformancePoints = 0,
+            maniaPerformancePoints = 0
+        };
 }
