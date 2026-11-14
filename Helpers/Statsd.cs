@@ -10,21 +10,15 @@ namespace RealistikOsu.Cron.Helpers;
 /// can't take the service down. The agent's address is looked up again every minute, because the
 /// agent container usually starts after this service and can change address.
 /// </summary>
-public sealed class Statsd : IDisposable
+public sealed class Statsd(IConfiguration configuration) : IDisposable
 {
     private static readonly TimeSpan ResolveEvery = TimeSpan.FromMinutes(1);
 
     private readonly UdpClient _udp = new();
-    private readonly string _host;
-    private readonly int _port;
+    private readonly string _host = configuration["STATSD_HOST"] ?? string.Empty;
+    private readonly int _port = int.TryParse(configuration["STATSD_PORT"], out var port) ? port : 8125;
     private IPEndPoint? _endpoint;
     private DateTime _nextResolve = DateTime.MinValue;
-
-    public Statsd(IConfiguration configuration)
-    {
-        _host = configuration["STATSD_HOST"] ?? string.Empty;
-        _port = int.TryParse(configuration["STATSD_PORT"], out var port) ? port : 8125;
-    }
 
     public void Gauge(string name, double value, string? tags = null) => Send(name, value, "g", tags);
 
