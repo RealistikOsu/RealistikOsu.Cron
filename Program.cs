@@ -1,5 +1,6 @@
 using RealistikOsu.Cron;
 using RealistikOsu.Cron.Context;
+using RealistikOsu.Cron.Helpers;
 using RealistikOsu.Cron.Repositories;
 using StackExchange.Redis;
 
@@ -15,6 +16,7 @@ var redisConnectionMultiplexer = ConnectionMultiplexer.Connect(new Configuration
 builder.Services.AddSingleton(redisConnectionMultiplexer);
 
 builder.Services.AddSingleton<DapperContext>();
+builder.Services.AddSingleton<Statsd>();
 
 builder.Services.AddSingleton<IUserRepository, UserRepository>();
 builder.Services.AddSingleton<IFirstPlaceRepository, FirstPlaceRepository>();

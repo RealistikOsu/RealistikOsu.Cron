@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using RealistikOsu.Cron.Entities;
 using RealistikOsu.Cron.Helpers;
 using RealistikOsu.Cron.Repositories;
@@ -14,6 +15,7 @@ public class Worker : BackgroundService
     private readonly HttpClient _httpClient;
 
     private readonly ILogger<Worker> _logger;
+    private readonly Statsd _statsd;
     private readonly IUserRepository _userRepository;
     private readonly ConnectionMultiplexer _redisConnectionMultiplexer;
     private readonly IFirstPlaceRepository _firstPlaceRepository;
@@ -24,7 +26,7 @@ public class Worker : BackgroundService
     public Worker(ILogger<Worker> logger, IConfiguration configuration, IUserRepository userRepository,
         ConnectionMultiplexer redisConnectionMultiplexer, IFirstPlaceRepository firstPlaceRepository,
         IScoreRepository scoreRepository, IUserBadgeRepository userBadgeRepository, 
-        IUserStatsRepository userStatsRepository)
+        IUserStatsRepository userStatsRepository, Statsd statsd)
     {
         _fokaKey = configuration.GetValue<string>("FokaKey") ?? string.Empty;
         _banchoApiUrl = configuration.GetValue<string>("BanchoApiUrl")!;
@@ -33,6 +35,7 @@ public class Worker : BackgroundService
         _httpClient = new HttpClient();
 
         _logger = logger;
+        _statsd = statsd;
         _userRepository = userRepository;
         _redisConnectionMultiplexer = redisConnectionMultiplexer;
         _firstPlaceRepository = firstPlaceRepository;
@@ -336,6 +339,7 @@ public class Worker : BackgroundService
         {
             _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
 
+            var started = Stopwatch.GetTimestamp();
             var users = await _userRepository.GetAllAsync();
             var donors = users.Where(user => user.Privileges.HasFlag(Privileges.Donor));
             var frozenUsers = users.Where(user => user.Frozen && user.Privileges.HasFlag(Privileges.Public));
@@ -355,6 +359,11 @@ public class Worker : BackgroundService
                 RemoveInactiveUsersFromLeaderboard(inactiveUsers),
                 RemoveRestrictedLeaderboards(restrictedUsers)
             );
+
+            _statsd.Timing("cron.cycle.time", Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            _statsd.Gauge("cron.users", users.Count());
+            _statsd.Gauge("cron.users.active", activeUsers.Count());
+            _statsd.Gauge("cron.users.restricted", restrictedUsers.Count());
 
             await Task.Delay(TimeSpan.FromMinutes(30), stoppingToken);
         }
